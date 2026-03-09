@@ -14,6 +14,11 @@ import os
 import shutil
 import platform
 
+# 修复 Windows CI 环境下中文输出编码问题
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 
 def get_streamlit_path():
     """获取 streamlit 包的安装路径"""
