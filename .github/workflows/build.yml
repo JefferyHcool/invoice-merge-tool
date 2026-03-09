@@ -1,0 +1,87 @@
+name: 打包发票合并工具
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 打包
+        run: python build.py
+        shell: cmd
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 发票合并工具-Windows
+          path: dist/发票合并工具/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 打包
+        run: python build.py
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 发票合并工具-macOS
+          path: dist/发票合并工具/
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: 下载 Windows 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: 发票合并工具-Windows
+          path: windows-build/
+
+      - name: 下载 macOS 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: 发票合并工具-macOS
+          path: macos-build/
+
+      - name: 打包 ZIP
+        run: |
+          cd windows-build && zip -r ../发票合并工具-Windows.zip . && cd ..
+          cd macos-build && zip -r ../发票合并工具-macOS.zip . && cd ..
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 发票合并工具 ${{ github.ref_name }}
+          files: |
+            发票合并工具-Windows.zip
+            发票合并工具-macOS.zip

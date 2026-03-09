@@ -1,0 +1,16 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Excel 数据文件（敏感数据不上传）
+*.xlsx
+*.xls
+
+# macOS
+.DS_Store
