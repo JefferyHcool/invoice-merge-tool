@@ -4,11 +4,29 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    outputs:
+      upload_url: ${{ steps.create.outputs.upload_url }}
+    steps:
+      - name: 创建 Release
+        id: create
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 发票合并工具 ${{ github.ref_name }}
+          draft: true
+
   build-windows:
     runs-on: windows-latest
+    needs: create-release
+    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
 
@@ -26,14 +44,26 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
 
-      - name: 上传构建产物
+      - name: 压缩
+        run: Compress-Archive -Path "dist/发票合并工具/*" -DestinationPath "invoice-merge-tool-Windows.zip"
+        shell: pwsh
+
+      - name: 上传 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 发票合并工具-Windows
-          path: dist/发票合并工具/
+          name: invoice-merge-tool-Windows
+          path: invoice-merge-tool-Windows.zip
+
+      - name: 上传到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: invoice-merge-tool-Windows.zip
 
   build-macos:
     runs-on: macos-latest
+    needs: create-release
+    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
 
@@ -49,40 +79,27 @@ jobs:
       - name: 打包
         run: python build.py
 
-      - name: 上传构建产物
+      - name: 压缩
+        run: cd dist && zip -r ../invoice-merge-tool-macOS.zip 发票合并工具/
+
+      - name: 上传 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 发票合并工具-macOS
-          path: dist/发票合并工具/
+          name: invoice-merge-tool-macOS
+          path: invoice-merge-tool-macOS.zip
 
-  release:
-    needs: [build-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - name: 下载 Windows 产物
-        uses: actions/download-artifact@v4
-        with:
-          name: 发票合并工具-Windows
-          path: windows-build/
-
-      - name: 下载 macOS 产物
-        uses: actions/download-artifact@v4
-        with:
-          name: 发票合并工具-macOS
-          path: macos-build/
-
-      - name: 打包 ZIP
-        run: |
-          cd windows-build && zip -r ../发票合并工具-Windows.zip . && cd ..
-          cd macos-build && zip -r ../发票合并工具-macOS.zip . && cd ..
-
-      - name: 创建 Release
+      - name: 上传到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: 发票合并工具 ${{ github.ref_name }}
-          files: |
-            发票合并工具-Windows.zip
-            发票合并工具-macOS.zip
+          files: invoice-merge-tool-macOS.zip
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: [create-release, build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: 发布 Release（取消 draft）
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
